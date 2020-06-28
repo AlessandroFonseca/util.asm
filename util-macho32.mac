@@ -1,0 +1,208 @@
+;*********************************************************************
+; util.asm 
+; Author: Marcos José Brusso
+; Version: 1.0.0
+; Licensed under the MIT license (see "license.txt"). 
+;https://rudamoura.com/syscall.html
+;https://opensource.apple.com/source/xnu/xnu-1504.9.37/bsd/kern/syscalls.master
+;*********************************************************************
+
+section .text
+global	exit, endl, strlen, printstr, readstr, printint, readint	; public symbols
+
+;*********************************************************************
+; _syscall
+;
+; Quit program
+; Arguments: 
+;		None
+; Returns: 
+; 		This function does not return
+;*********************************************************************
+_syscall:
+	int 0x80 ; 
+	ret
+
+;*********************************************************************
+; exit
+;
+; Quit program
+; Arguments: 
+;		None
+; Returns: 
+; 		This function does not return
+;*********************************************************************
+exit:
+        mov		eax, 1                 ; rax: system call number (1=exit)
+		push	0						;retorna 0 para o sistema operacional
+        call _syscall    				; system call
+;*********************************************************************
+
+;*********************************************************************
+; endl
+;
+; prints a newline character
+; Arguments: 
+;		None
+; Returns: 
+;		Nothing
+;*********************************************************************
+endl:
+	mov		rdi, util.endl
+	call	printstr
+	ret
+   
+;*********************************************************************
+
+;*********************************************************************
+; strlen
+;
+; Calculates the length of string s
+; Arguments:
+; 		rdi: address of a null-terminated string (array of chars terminated by 0)
+; Returns:
+;		rax: string size
+;*********************************************************************
+strlen:				
+		xor		eax, eax			; rax=0			// reset count
+.loop:								; do{
+		cmp		byte [edi], 0		;   if (*s==0)	// If zero, skip loop
+		je		strlen.end			;     break
+		inc		eax					;   rax++ 		// increment count
+		inc		edi					; 	s++ 		// advance to the next char
+		jmp		strlen.loop			; }while(true)
+.end:
+		ret							; return rax
+;*********************************************************************
+
+
+;*********************************************************************
+; printstr
+;
+; Print a string
+; Arguments:
+; 		edi: address of a null-terminated string (array of chars terminated by 0)
+; Returns: 
+;		Nothing
+;*********************************************************************
+printstr:
+		push 	edi			; save copy (rdi should be caller saved)
+		call 	strlen
+		pop     edi		    ; string
+		push	eax			; tamanho da string
+		push	edi			; endereço da string
+		push	1			; STDOUT (terminal)
+		mov 	eax, 4		; syscall write=4
+		call _syscall		;syscall
+		add		esp,12		; esp = esp + 12 (esp = stack pointer)
+		ret
+;*********************************************************************
+
+
+;*********************************************************************
+; readstr
+;
+; Read up to max_size chars from standard input into a string.
+; Arguments:
+; 		edi: address of a string (array of chars)
+; 		esi: max_size - limit input size
+; Returns:
+;		eax: the number of bytes read
+;*********************************************************************
+readstr:
+		mov		ebx,edi				;copia endereço dod buffer para ebx
+		push	esi					;tamanho do buffer
+		push	edi					;endereço de memória do buffer
+		push	0					; STDIN (terminal)
+		mov		eax,3				; syscal read = 3
+		call _syscall				;chamada sistema operacional
+		add		esp,12				;restaura a pilha
+		dec 	eax					; removing trailing newline char
+		mov		byte [ebx+eax], 0	; replace with '\0'
+		ret
+;*********************************************************************
+	
+
+
+;*********************************************************************
+; printint
+;
+; Print a integer number (decimal)
+; Arguments:
+; 		rdi: 	number (n)
+; Returns: 
+;		Nothing
+;*********************************************************************
+printint:
+		mov		eax, edi			; rax = n	
+		xor 	ecx, ecx			; is_neg = false
+		cmp 	eax, 0				;
+		jge		printint.nn  		; if(n<0)	  
+		not 	ecx					; 		is_neg = true
+		neg 	eax					;     	n = -n
+.nn:	
+		mov 	ebx, 10				; ebx = 10
+		mov 	edi, util.temps+20	; char *p = &s[10]
+.loop:								; do{
+		xor 	edx, edx			;		rdx=0 
+		div 	ebx					; 		rdx=rdx:rax%10; rax=rdx:rax/10
+		add 	dl, '0'				;		decimal digit
+		mov 	byte [edi], dl		;		*p = digit in dl
+		dec 	edi					; 		p--
+		cmp 	eax, 0				; 
+		jg 		printint.loop		; }while (n>0)
+
+		test 	ecx, ecx			; if(is_neg)
+		jz		printint.notneg	;   	// Prepend minus sign	
+		mov 	byte [edi], '-'		; 		*p = '-'
+		dec 	edi					;		p--
+.notneg:		
+		inc 	edi					; p++
+		call 	printstr			; print number
+		ret
+;*********************************************************************	
+	 
+	
+
+;*********************************************************************
+; readint
+;
+; Read a int64 from standard input
+; Arguments: 
+;		None
+; Returns:
+;		rax: The value entered
+;*********************************************************************
+readint:
+		mov 	edi, util.temps				; temp string address	
+		mov 	esi, 20						; max input size
+		call 	readstr						; read number as string
+		lea 	edi, [eax+util.temps-1]		; char *p = &s[strlen(string)];  //scans string backward
+		xor 	eax, eax					; result value
+		mov 	edx, 1						; multiplier
+.beginloop:		
+		cmp		edi, util.temps				; while(p>=s){
+		jl		readint.end					;
+		xor		ecx, ecx					;	
+		mov 	cl, byte [edi] 				; 	 cl = current char
+		cmp 	cl, '-'						;	 if(cl=='-')
+		jne		readint.notneg				;
+		neg		ax							;		rax=-rax
+		jmp		readint.end					;
+.notneg:					
+		cmp		cl, '9'						;	 if(!isdigit(cl)) continue
+		jg		readint.endloop				;
+		sub		cl, '0'						;
+		jl		readint.endloop				;
+		imul	ecx, edx					;	 digit_value = current_char * multiplier
+		add		eax, ecx					;	 result += digit_value
+		imul	edx, 10						;	 multiplier *= 10
+.endloop:
+		dec		edi							;	 previous char //scans string backward
+		jmp		readint.beginloop			; }
+.end:		
+		ret
+
+section	.data
+    util.temps	db	'000000000000000000000',0    	; char util.temps[]="000000000000000000000"
+    util.endl   db 	10,0							; char util.endl[]="\n"

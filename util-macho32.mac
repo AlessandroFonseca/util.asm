@@ -3,6 +3,7 @@
 ; Author: Marcos José Brusso
 ; Version: 1.0.0
 ; Licensed under the MIT license (see "license.txt"). 
+; Ported to Mac OSX (version 10.15.5 tested). 32 bits syscalls
 ;https://rudamoura.com/syscall.html
 ;https://opensource.apple.com/source/xnu/xnu-1504.9.37/bsd/kern/syscalls.master
 ;*********************************************************************

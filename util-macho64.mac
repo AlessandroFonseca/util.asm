@@ -3,6 +3,7 @@
 ; Author: Marcos José Brusso
 ; Version: 1.0.0
 ; Licensed under the MIT license (see "license.txt"). 
+; Ported to Mac OSX (version 10.15.5 tested). 64 bits syscalls
 ;https://filippo.io/making-system-calls-from-assembly-in-mac-os-x/
 ;https://www.tfzx.net/article/29772.html
 ;https://rudamoura.com/syscall.html
